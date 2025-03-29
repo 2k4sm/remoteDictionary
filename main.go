@@ -18,8 +18,7 @@ func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 	cfg := config.LoadConfig()
 
-	log.Printf("Starting remoteDictionary with port=%s, maxCacheSize=%d, maxKeySize=%d, maxValueSize=%d",
-		cfg.Port, cfg.MaxCacheSize, cfg.MaxKeySize, cfg.MaxValueSize)
+	log.Printf("Starting remoteDictionary with port=%s, maxKeySize=%d, maxValueSize=%d", cfg.Port, cfg.MaxKeySize, cfg.MaxValueSize)
 
 	server := api.NewServer(cfg)
 

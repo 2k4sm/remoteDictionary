@@ -10,7 +10,6 @@ import (
 
 type Config struct {
 	Port         string
-	MaxCacheSize int
 	MaxKeySize   int
 	MaxValueSize int
 }
@@ -20,15 +19,6 @@ func LoadConfig() *Config {
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "7171"
-	}
-
-	maxCacheSize := 1000000
-	if size := os.Getenv("MAX_CACHE_SIZE"); size != "" {
-		if val, err := strconv.Atoi(size); err == nil {
-			maxCacheSize = val
-		} else {
-			log.Printf("Warning: Invalid MAX_CACHE_SIZE, using default: %v", err)
-		}
 	}
 
 	maxKeySize := 256
@@ -55,7 +45,6 @@ func LoadConfig() *Config {
 
 	return &Config{
 		Port:         port,
-		MaxCacheSize: maxCacheSize,
 		MaxKeySize:   maxKeySize,
 		MaxValueSize: maxValueSize,
 	}

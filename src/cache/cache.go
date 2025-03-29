@@ -3,7 +3,11 @@ package cache
 import (
 	"container/list"
 	"errors"
+	"log"
+	"runtime"
 	"sync"
+	"syscall"
+	"time"
 )
 
 var (
@@ -21,16 +25,14 @@ type Cache struct {
 	data       map[string]*list.Element
 	lru        *list.List
 	mu         sync.RWMutex
-	maxSize    int
 	maxKeySize int
 	maxValSize int
 }
 
-func NewCache(maxSize, maxKeySize, maxValueSize int) *Cache {
+func NewCache(maxKeySize, maxValueSize int) *Cache {
 	return &Cache{
 		data:       make(map[string]*list.Element),
 		lru:        list.New(),
-		maxSize:    maxSize,
 		maxKeySize: maxKeySize,
 		maxValSize: maxValueSize,
 	}
@@ -52,10 +54,6 @@ func (c *Cache) Put(key, value string) error {
 		c.lru.MoveToFront(elem)
 		elem.Value.(*cacheItem).value = value
 		return nil
-	}
-
-	if c.lru.Len() >= c.maxSize {
-		c.evict()
 	}
 
 	elem := c.lru.PushFront(&cacheItem{key: key, value: value})
@@ -81,9 +79,58 @@ func (c *Cache) Get(key string) (string, error) {
 	return value, nil
 }
 
-func (c *Cache) evict() {
-	if elem := c.lru.Back(); elem != nil {
-		c.lru.Remove(elem)
-		delete(c.data, elem.Value.(*cacheItem).key)
+func getTotalMemory() uint64 {
+	var info syscall.Sysinfo_t
+	if err := syscall.Sysinfo(&info); err != nil {
+		log.Printf("Error retrieving system info: %v", err)
+		return 2 * 1024 * 1024 * 1024
+	}
+	return info.Totalram * uint64(info.Unit)
+}
+
+func (c *Cache) evict(threshold uint64) {
+	batchSize := 5
+	for {
+		var memStats runtime.MemStats
+		runtime.ReadMemStats(&memStats)
+		if memStats.Alloc <= threshold-threshold/2 {
+			batchSize = 5
+			break
+		}
+
+		c.mu.Lock()
+		removed := 0
+		for removed < batchSize && c.lru.Len() > 0 {
+			elem := c.lru.Back()
+			if elem == nil {
+				break
+			}
+			c.lru.Remove(elem)
+			delete(c.data, elem.Value.(*cacheItem).key)
+			removed++
+		}
+		c.mu.Unlock()
+
+		time.Sleep(100 * time.Millisecond)
+		batchSize *= 10
+	}
+}
+
+func (c *Cache) MonitorMemoryUsage() {
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+	log.Println("Monitoring memory usage...")
+	for range ticker.C {
+		totalMem := getTotalMemory()
+		threshold := totalMem * 70 / 100 // 70% threshold
+
+		var memStats runtime.MemStats
+		runtime.ReadMemStats(&memStats)
+		log.Println("nowMemory:", memStats.Alloc/1024/1024)
+		log.Println("threshold:", threshold/1024/1024)
+		if memStats.Alloc > threshold {
+			log.Printf("High memory usage detected: %d bytes allocated (threshold: %d bytes). Initiating eviction...", memStats.Alloc, threshold)
+			c.evict(threshold)
+		}
 	}
 }

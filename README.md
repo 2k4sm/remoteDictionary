@@ -29,20 +29,31 @@ go install github.com/2k4sm/remoteDictionary@latest
 ```
 
 ## Configuration
-
-```bash
-export PORT=7171
-export MAX_CACHE_SIZE=1000000
-export MAX_KEY_SIZE=256
-export MAX_VALUE_SIZE=256
-```
-
-Alternatively, you can create a `.env` file in the project root:
+Given below are the default values but you can change it by creating a `.env` file in the project root:
 ```
 PORT=7171
-MAX_CACHE_SIZE=1000000
 MAX_KEY_SIZE=256
 MAX_VALUE_SIZE=256
+```
+
+### Using Docker
+```bash
+# Build using
+docker build -t remotedictionary .
+```
+
+```bash
+# Run using
+docker run -p 7171:7171 remotedictionary
+```
+
+## You can also pull the image from dockerhub and use it.
+```bash
+# Pull the image using
+docker pull sm2k4/remotedictionary:main
+
+# Run it using
+docker run -p 7171:7171  sm2k4/remotedictionary:main
 ```
 
 ## API Usage
