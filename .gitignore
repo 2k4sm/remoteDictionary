@@ -2,3 +2,5 @@
 remoteDictionary
 temp
 tmp
+*.py
+.ropeproject

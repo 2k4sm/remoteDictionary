@@ -16,3 +16,8 @@ type GetResponse struct {
 	Value   string `json:"value,omitzero"`
 	Message string `json:"message,omitzero"`
 }
+
+type ErrorResponse struct {
+	Status  string `json:"status"`
+	Message string `json:"message"`
+}

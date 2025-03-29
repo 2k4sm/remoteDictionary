@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"runtime"
 	"syscall"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 )
 
 func main() {
+	runtime.GOMAXPROCS(runtime.NumCPU())
 	cfg := config.LoadConfig()
 
 	log.Printf("Starting remoteDictionary with port=%s, maxCacheSize=%d, maxKeySize=%d, maxValueSize=%d",
