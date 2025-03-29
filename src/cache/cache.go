@@ -62,19 +62,16 @@ func (c *Cache) Put(key, value string) error {
 }
 
 func (c *Cache) Get(key string) (string, error) {
-	c.mu.RLock()
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	elem, ok := c.data[key]
 	if !ok {
-		c.mu.RUnlock()
 		return "", ErrKeyNotFound
 	}
 
 	value := elem.Value.(*cacheItem).value
-	c.mu.RUnlock()
 
-	c.mu.Lock()
 	c.lru.MoveToFront(elem)
-	c.mu.Unlock()
 
 	return value, nil
 }
@@ -93,12 +90,19 @@ func (c *Cache) evict(threshold uint64) {
 	for {
 		var memStats runtime.MemStats
 		runtime.ReadMemStats(&memStats)
-		if memStats.Alloc <= threshold-threshold/2 {
-			batchSize = 5
+		if memStats.Alloc <= threshold/2 {
+			log.Printf("Memory reduced to %d MB (below target %d MB), stopping eviction",
+				memStats.Alloc/1024/1024, threshold/2/1024/1024)
 			break
 		}
 
 		c.mu.Lock()
+		if c.lru.Len() == 0 {
+			c.mu.Unlock()
+			log.Println("Cache empty, cannot evict further")
+			break
+		}
+
 		removed := 0
 		for removed < batchSize && c.lru.Len() > 0 {
 			elem := c.lru.Back()
@@ -110,9 +114,10 @@ func (c *Cache) evict(threshold uint64) {
 			removed++
 		}
 		c.mu.Unlock()
+		batchSize = min(batchSize*2, 1000)
 
-		time.Sleep(100 * time.Millisecond)
-		batchSize *= 10
+		runtime.GC()
+		time.Sleep(50 * time.Millisecond)
 	}
 }
 
@@ -121,16 +126,18 @@ func (c *Cache) MonitorMemoryUsage() {
 	defer ticker.Stop()
 	log.Println("Monitoring memory usage...")
 	for range ticker.C {
+		var memStats runtime.MemStats
+		runtime.ReadMemStats(&memStats)
+
 		totalMem := getTotalMemory()
 		threshold := totalMem * 70 / 100 // 70% threshold
 
-		var memStats runtime.MemStats
-		runtime.ReadMemStats(&memStats)
-		log.Println("nowMemory:", memStats.Alloc/1024/1024)
-		log.Println("threshold:", threshold/1024/1024)
+		memUsageMB := memStats.Alloc / 1024 / 1024
+		thresholdMB := threshold / 1024 / 1024
+
 		if memStats.Alloc > threshold {
-			log.Printf("High memory usage detected: %d bytes allocated (threshold: %d bytes). Initiating eviction...", memStats.Alloc, threshold)
-			c.evict(threshold)
+			log.Printf("Memory usage Critical: %d MB used (threshold: %d MB).", memUsageMB, thresholdMB)
+			go c.evict(threshold)
 		}
 	}
 }

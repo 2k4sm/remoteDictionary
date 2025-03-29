@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -37,6 +38,19 @@ func (s *Server) Start() error {
 
 	mux.HandleFunc("/put", s.handler.PutHandler)
 	mux.HandleFunc("/get", s.handler.GetHandler)
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		data := map[string]string{
+			"status": "healthy",
+			"time":   time.Now().String(),
+		}
+
+		if err := json.NewEncoder(w).Encode(data); err != nil {
+			log.Printf("Error encoding JSON response: %v", err)
+			http.Error(w, "Error encoding response", http.StatusInternalServerError)
+		}
+	})
 	c := cors.New(cors.Options{
 		AllowedOrigins:   []string{"*"},
 		AllowedMethods:   []string{"GET", "POST", "OPTIONS"},
