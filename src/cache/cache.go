@@ -6,8 +6,9 @@ import (
 	"log"
 	"runtime"
 	"sync"
-	"syscall"
 	"time"
+
+	"github.com/shirou/gopsutil/v3/mem"
 )
 
 var (
@@ -77,12 +78,15 @@ func (c *Cache) Get(key string) (string, error) {
 }
 
 func getTotalMemory() uint64 {
-	var info syscall.Sysinfo_t
-	if err := syscall.Sysinfo(&info); err != nil {
-		log.Printf("Error retrieving system info: %v", err)
-		return 2 * 1024 * 1024 * 1024
+	const defaultMemory uint64 = 2 * 1024 * 1024 * 1024
+	
+	vmStat, err := mem.VirtualMemory()
+	if err != nil {
+		log.Printf("Error retrieving memory info: %v", err)
+		return defaultMemory
 	}
-	return info.Totalram * uint64(info.Unit)
+	
+	return vmStat.Total
 }
 
 func (c *Cache) evict(threshold uint64) {
