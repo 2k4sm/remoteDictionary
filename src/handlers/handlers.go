@@ -14,7 +14,8 @@ import (
 
 var buffersPool = sync.Pool{
 	New: func() any {
-		return make([]byte, 1024)
+		b := make([]byte, 1024)
+		return &b
 	},
 }
 
@@ -34,8 +35,9 @@ func (h *Handler) PutHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	buf := buffersPool.Get().([]byte)
-	defer buffersPool.Put(buf)
+	bufPtr := buffersPool.Get().(*[]byte)
+	defer buffersPool.Put(bufPtr)
+	buf := *bufPtr
 
 	body, err := io.ReadAll(io.LimitReader(r.Body, int64(len(buf))))
 	if err != nil {

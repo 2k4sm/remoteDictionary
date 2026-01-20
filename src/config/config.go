@@ -15,7 +15,9 @@ type Config struct {
 }
 
 func LoadConfig() *Config {
-	godotenv.Load()
+	if err := godotenv.Load(); err != nil {
+		log.Printf("Warning: error loading .env file: %v", err)
+	}
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "7171"
