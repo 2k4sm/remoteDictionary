@@ -52,7 +52,7 @@ jobs:
         run: |
           echo "Deploying to GKE cluster..."
           kubectl apply -f k8s/
-          kubectl rollout status deployment/remotedictionary
+          kubectl rollout status deployment/remotedictionary-deployment
 
   dast_scan:
     name: DAST (Dynamic Security Scan)
