@@ -1,7 +1,9 @@
 # Project Proposal: CI/CD Pipeline for remoteDictionary Application
 
 **Student Name:** Shrinibas Mahanta
+
 **Scaler Student ID:** 23bcs10067
+
 **Project Title:** CI/CD Pipeline for remoteDictionary Application
 
 ## 1. Application Description
