@@ -1,0 +1,110 @@
+name: CD Pipeline
+
+on:
+  workflow_run:
+    workflows: ["CI Pipeline"]
+    types:
+      - completed
+    branches:
+      - main
+
+jobs:
+  deploy:
+    name: Deploy to GKE
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    permissions:
+      contents: "read"
+      id-token: "write"
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Verify Secrets
+        run: |
+          if [ -z "${{ secrets.GCP_PROJECT_ID }}" ]; then echo "::error::GCP_PROJECT_ID secret is missing"; exit 1; fi
+          if [ -z "${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}" ]; then echo "::error::GCP_WORKLOAD_IDENTITY_PROVIDER secret is missing"; exit 1; fi
+          if [ -z "${{ secrets.GCP_SERVICE_ACCOUNT }}" ]; then echo "::error::GCP_SERVICE_ACCOUNT secret is missing"; exit 1; fi
+          if [ -z "${{ secrets.GKE_CLUSTER_NAME }}" ]; then echo "::error::GKE_CLUSTER_NAME secret is missing"; exit 1; fi
+          if [ -z "${{ secrets.GKE_ZONE }}" ]; then echo "::error::GKE_ZONE secret is missing"; exit 1; fi
+
+      - id: "auth"
+        name: "Authenticate to Google Cloud"
+        uses: "google-github-actions/auth@v2"
+        with:
+          workload_identity_provider: "${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}"
+          service_account: "${{ secrets.GCP_SERVICE_ACCOUNT }}"
+
+      - id: "get-credentials"
+        name: "Get GKE Credentials"
+        uses: "google-github-actions/get-gke-credentials@v2"
+        with:
+          cluster_name: "${{ secrets.GKE_CLUSTER_NAME }}"
+          location: "${{ secrets.GKE_ZONE }}"
+          project_id: "${{ secrets.GCP_PROJECT_ID }}"
+
+      - name: Update Image Tag in Deployment
+        run: |
+          sed -i "s|DOCKER_IMAGE_PLACEHOLDER|${{ secrets.DOCKER_USERNAME }}/remotedictionary:${{ github.sha }}|g" k8s/deployment.yaml
+
+      - name: Deploy to GKE
+        run: |
+          echo "Deploying to GKE cluster..."
+          kubectl apply -f k8s/
+          kubectl rollout status deployment/remotedictionary
+
+  dast_scan:
+    name: DAST (Dynamic Security Scan)
+    needs: deploy
+    runs-on: ubuntu-latest
+    permissions:
+      contents: "read"
+      id-token: "write"
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - id: "auth"
+        name: "Authenticate to Google Cloud"
+        uses: "google-github-actions/auth@v2"
+        with:
+          workload_identity_provider: "${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}"
+          service_account: "${{ secrets.GCP_SERVICE_ACCOUNT }}"
+
+      - id: "get-credentials"
+        name: "Get GKE Credentials"
+        uses: "google-github-actions/get-gke-credentials@v2"
+        with:
+          cluster_name: "${{ secrets.GKE_CLUSTER_NAME }}"
+          location: "${{ secrets.GKE_ZONE }}"
+          project_id: "${{ secrets.GCP_PROJECT_ID }}"
+
+      - name: Get Service URL
+        id: get_url
+        run: |
+          echo "Waiting for LoadBalancer IP..."
+          ENDPOINT=""
+          count=0
+          while [ -z "$ENDPOINT" ]; do
+            if [ $count -ge 120 ]; then
+              echo "Timeout waiting for LoadBalancer IP"
+              exit 1
+            fi
+            ENDPOINT=$(kubectl get svc remotedictionary-service -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+            if [ -z "$ENDPOINT" ]; then
+              ENDPOINT=$(kubectl get svc remotedictionary-service -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+            fi
+            sleep 10
+            count=$((count+1))
+          done
+          echo "Service is available at: http://$ENDPOINT"
+          echo "url=http://$ENDPOINT" >> $GITHUB_OUTPUT
+
+      - name: Run DAST (OWASP ZAP - Baseline)
+        uses: zaproxy/action-baseline@v0.11.0
+        with:
+          target: ${{ steps.get_url.outputs.url }}
+          cmd_options: "-a"
+          allow_issue_writing: false
+          fail_action: false

@@ -1,0 +1,28 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: remotedictionary-deployment
+  labels:
+    app: remotedictionary
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: remotedictionary
+  template:
+    metadata:
+      labels:
+        app: remotedictionary
+    spec:
+      containers:
+        - name: remotedictionary
+          image: DOCKER_IMAGE_PLACEHOLDER
+          ports:
+            - containerPort: 7171
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "250m"
+            limits:
+              memory: "128Mi"
+              cpu: "500m"
