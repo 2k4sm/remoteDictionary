@@ -1,0 +1,9 @@
+timeout: 10m
+format: table
+dependency-tree: true
+list-all-pkgs: true
+exit-code: 0
+output: ""
+severity:
+  - HIGH
+  - CRITICAL
